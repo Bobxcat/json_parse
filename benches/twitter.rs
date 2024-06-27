@@ -1,6 +1,6 @@
 use std::{
     fs::{self, File},
-    io::{BufReader, Read},
+    io::{BufRead, BufReader, Read},
     path::{Path, PathBuf},
 };
 
@@ -13,7 +13,7 @@ fn do_bench<B: Bench>(grp: &mut BenchmarkGroup<WallTime>, file: &Path, b: B) {
     if B::CAN_STREAM {
         grp.bench_function(b.name().into(), |bencher| {
             bencher.iter_batched(
-                || black_box(File::open(file).unwrap()),
+                || black_box(BufReader::new(File::open(file).unwrap())),
                 |f| b.parse_stream(f),
                 BatchSize::SmallInput,
             )
@@ -30,7 +30,7 @@ trait Bench {
 
     fn name(&self) -> impl Into<String>;
     fn parse_str(&self, s: &str);
-    fn parse_stream(&self, s: impl Read);
+    fn parse_stream(&self, s: BufReader<impl Read>);
 }
 
 struct BenchSerdeJson;
@@ -47,7 +47,7 @@ impl Bench for BenchSerdeJson {
         black_box(x);
     }
 
-    fn parse_stream(&self, s: impl Read) {
+    fn parse_stream(&self, s: BufReader<impl Read>) {
         let x: serde_json::Value = serde_json::from_reader(s).unwrap();
         black_box(x);
     }
@@ -66,7 +66,7 @@ impl Bench for BenchJson {
         black_box(json::parse(s).unwrap());
     }
 
-    fn parse_stream(&self, _: impl Read) {
+    fn parse_stream(&self, _: BufReader<impl Read>) {
         unimplemented!()
     }
 }
@@ -88,8 +88,8 @@ macro_rules! bench_json_parse_api0 {
                 black_box((x, p));
             }
 
-            fn parse_stream(&self, s: impl Read) {
-                let mut p = $root::parse::JsonParser::new(BufReader::new(s));
+            fn parse_stream(&self, s: BufReader<impl Read>) {
+                let mut p = $root::parse::JsonParser::new(s);
                 let x = p.parse();
                 black_box((x, p));
             }
@@ -97,29 +97,7 @@ macro_rules! bench_json_parse_api0 {
     };
 }
 
-bench_json_parse_api0!(BenchJsonParse1, json_parse, "json_parse_0");
-
-struct BenchJsonParse0;
-
-impl Bench for BenchJsonParse0 {
-    const CAN_STREAM: bool = true;
-
-    fn name(&self) -> impl Into<String> {
-        "json_parse_0"
-    }
-
-    fn parse_str(&self, s: &str) {
-        let mut p = json_parse::parse::JsonParser::new(s.as_bytes());
-        let x = p.parse();
-        black_box((x, p));
-    }
-
-    fn parse_stream(&self, s: impl Read) {
-        let mut p = json_parse::parse::JsonParser::new(BufReader::new(s));
-        let x = p.parse();
-        black_box((x, p));
-    }
-}
+bench_json_parse_api0!(BenchJsonParse0, parse_0, "json_parse_0");
 
 pub fn entry(c: &mut Criterion) {
     let path = black_box(PathBuf::from("./twitter.json"));
