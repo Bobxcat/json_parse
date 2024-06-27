@@ -36,7 +36,8 @@ fn main() {
         ]
 
     "#;
+    let raw = include_str!("../twitter.json");
 
-    let p = parse(Arc::from(raw.as_bytes()));
-    println!("{p}");
+    let p = parse(raw.as_bytes());
+    // println!("{p}");
 }

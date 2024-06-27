@@ -6,9 +6,10 @@ use std::{
     sync::Arc,
 };
 
+use ahash::HashMapExt;
 use ptree::TreeItem;
 use slotmap::{new_key_type, SlotMap};
-use smol_str::SmolStr;
+use ustr::{Ustr, UstrMap};
 
 new_key_type! {
     pub struct ItemId;
@@ -27,7 +28,7 @@ struct JsonDigits {
 
 impl JsonDigits {
     pub fn empty() -> Self {
-        Self::from_digits(vec![])
+        Self::from_digits(Vec::new())
     }
     pub fn from_digits(digits: Vec<u8>) -> Self {
         Self { digits }
@@ -103,11 +104,22 @@ impl std::fmt::Display for JsonNum {
 
 #[derive(Debug, Clone)]
 enum Item {
-    Object { fields: HashMap<SmolStr, ItemId> },
-    Array { elems: Vec<ItemId> },
-    String { s: String },
-    Number { n: JsonNum },
-    Boolean { b: bool },
+    Object {
+        /// Note: we use a non-hashing hash function since `Ustr` already hashes using
+        fields: UstrMap<ItemId>,
+    },
+    Array {
+        elems: Vec<ItemId>,
+    },
+    String {
+        s: String,
+    },
+    Number {
+        n: JsonNum,
+    },
+    Boolean {
+        b: bool,
+    },
     Null,
 }
 
@@ -244,7 +256,7 @@ impl<I: ParseInput> JsonParser<I> {
         self.cursor.advance(1);
         self.cursor.skip_whitespace();
 
-        let mut fields = HashMap::new();
+        let mut fields = UstrMap::new();
 
         loop {
             // In case of empty object, check at the start
@@ -255,7 +267,7 @@ impl<I: ParseInput> JsonParser<I> {
 
             let name = self.parse_string();
             let name = match &self.items[name] {
-                Item::String { s } => SmolStr::new(s),
+                Item::String { s } => Ustr::from(s),
                 _ => unreachable!(),
             };
             self.cursor.skip_whitespace();
@@ -654,7 +666,7 @@ impl<I: ParseInput> ParseCursor<I> {
 /// An [Item] wrapper for pretty-printing the tree. This is a fairly expensive type
 #[derive(Debug, Clone)]
 struct ItemPTree {
-    this_name: Option<SmolStr>,
+    this_name: Option<Ustr>,
     this: ItemId,
     items: Arc<SlotMap<ItemId, Item>>,
 }

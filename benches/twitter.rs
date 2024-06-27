@@ -20,7 +20,7 @@ fn do_bench<B: Bench>(grp: &mut BenchmarkGroup<WallTime>, file: &Path, b: B) {
         });
     }
     let s = fs::read_to_string(file).unwrap();
-    grp.bench_function(format!("{}_no_streaming", b.name().into()), |bencher| {
+    grp.bench_function(format!("{}_from_memory", b.name().into()), |bencher| {
         bencher.iter(|| b.parse_str(black_box(&s)))
     });
 }
@@ -98,6 +98,7 @@ macro_rules! bench_json_parse_api0 {
 }
 
 bench_json_parse_api0!(BenchJsonParse0, parse_0, "json_parse_0");
+bench_json_parse_api0!(BenchJsonParseCurr, json_parse, "json_parse_curr");
 
 pub fn entry(c: &mut Criterion) {
     let path = black_box(PathBuf::from("./twitter.json"));
@@ -107,6 +108,7 @@ pub fn entry(c: &mut Criterion) {
     do_bench(grp, &path, BenchSerdeJson);
     do_bench(grp, &path, BenchJson);
     do_bench(grp, &path, BenchJsonParse0);
+    do_bench(grp, &path, BenchJsonParseCurr);
 }
 
 criterion_group!(benches, entry);
