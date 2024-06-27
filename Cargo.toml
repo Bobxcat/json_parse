@@ -18,6 +18,7 @@ json = "0.12.4"
 serde_json = "1.0.116"
 parse_0 = { package = "json_parse", git = "https://github.com/Bobxcat/json_parse.git", rev = "903aed8c46024b9165624faac9f012c36a31a703" }
 parse_1 = { package = "json_parse", git = "https://github.com/Bobxcat/json_parse.git", rev = "33b7caa349e884a604bd85ef7bf9acffc9705326" }
+parse_2 = { package = "json_parse", git = "https://github.com/Bobxcat/json_parse.git", rev = "f1cd7181c2fdf03910bc623661a44bbc9b943895" }
 
 [[bench]]
 harness = false

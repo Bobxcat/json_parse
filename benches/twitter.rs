@@ -1,6 +1,6 @@
 use std::{
     fs::{self, File},
-    io::{BufRead, BufReader, Read},
+    io::{BufReader, Read},
     path::{Path, PathBuf},
 };
 
@@ -99,6 +99,7 @@ macro_rules! bench_json_parse_api0 {
 
 bench_json_parse_api0!(BenchJsonParse0, parse_0, "json_parse_0");
 bench_json_parse_api0!(BenchJsonParse1, parse_1, "json_parse_1");
+bench_json_parse_api0!(BenchJsonParse2, parse_2, "json_parse_2");
 bench_json_parse_api0!(BenchJsonParseCurr, json_parse, "json_parse_curr");
 
 pub fn entry(c: &mut Criterion) {
@@ -110,6 +111,7 @@ pub fn entry(c: &mut Criterion) {
     do_bench(grp, &path, BenchJson);
     do_bench(grp, &path, BenchJsonParse0);
     do_bench(grp, &path, BenchJsonParse1);
+    do_bench(grp, &path, BenchJsonParse2);
     do_bench(grp, &path, BenchJsonParseCurr);
 }
 

@@ -343,8 +343,8 @@ impl<I: ParseInput> JsonParser<I> {
 
         self.cursor.advance(1);
 
-        let s = String::from_utf8(s_bytes).unwrap();
-        self.items.insert(Item::String { s: Ustr::from(&s) })
+        let s = std::str::from_utf8(&s_bytes).expect("Malformed UTF-8 in string!");
+        self.items.insert(Item::String { s: Ustr::from(s) })
     }
     /// Parses a JSON string escape sequence, such as `\n` or `\/` or `\u`
     ///
