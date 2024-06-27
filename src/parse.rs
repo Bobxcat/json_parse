@@ -125,19 +125,9 @@ enum Item {
 
 #[derive(Debug, Clone)]
 struct CachedConsts {
-    pub item_true: Option<ItemId>,
-    pub item_false: Option<ItemId>,
-    pub item_null: Option<ItemId>,
-}
-
-impl CachedConsts {
-    pub fn new() -> Self {
-        Self {
-            item_true: None,
-            item_false: None,
-            item_null: None,
-        }
-    }
+    pub item_true: ItemId,
+    pub item_false: ItemId,
+    pub item_null: ItemId,
 }
 
 pub struct JsonParser<I> {
@@ -154,43 +144,32 @@ impl<I> std::fmt::Debug for JsonParser<I> {
 }
 impl<I: ParseInput> JsonParser<I> {
     pub fn new(input: I) -> Self {
+        let mut items = SlotMap::default();
+        let cache = CachedConsts {
+            item_true: items.insert(Item::Boolean { b: true }),
+            item_false: items.insert(Item::Boolean { b: false }),
+            item_null: items.insert(Item::Null),
+        };
         Self {
             head: None,
-            items: SlotMap::default(),
-            cache: CachedConsts::new(),
+            items,
+            cache,
             cursor: ParseCursor::new(input),
         }
     }
+
     fn insert_true(&mut self) -> ItemId {
-        match self.cache.item_true {
-            Some(i) => i,
-            None => {
-                let i = self.items.insert(Item::Boolean { b: true });
-                self.cache.item_true = Some(i);
-                i
-            }
-        }
+        self.cache.item_true
     }
+
     fn insert_false(&mut self) -> ItemId {
-        match self.cache.item_false {
-            Some(i) => i,
-            None => {
-                let i = self.items.insert(Item::Boolean { b: false });
-                self.cache.item_false = Some(i);
-                i
-            }
-        }
+        self.cache.item_false
     }
+
     fn insert_null(&mut self) -> ItemId {
-        match self.cache.item_null {
-            Some(i) => i,
-            None => {
-                let i = self.items.insert(Item::Null);
-                self.cache.item_null = Some(i);
-                i
-            }
-        }
+        self.cache.item_null
     }
+
     pub fn parse(&mut self) -> ItemId {
         let head = self.parse_any_item();
         self.head = Some(head);
