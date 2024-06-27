@@ -501,6 +501,12 @@ impl ParseInput for Arc<[u8]> {
     }
 }
 
+impl ParseInput for &[u8] {
+    fn next_byte(&mut self, curr_read: usize) -> Option<u8> {
+        self.get(curr_read).copied()
+    }
+}
+
 impl ParseInput for VecDeque<u8> {
     fn next_byte(&mut self, _: usize) -> Option<u8> {
         self.pop_back()

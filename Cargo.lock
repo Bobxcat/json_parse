@@ -357,8 +357,19 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "json",
+ "json_parse 0.1.0 (git+https://github.com/Bobxcat/json_parse.git?rev=110c23dce8693da4234aa7a2173d97d588a4e044)",
  "ptree",
  "serde_json",
+ "slotmap",
+ "smol_str",
+]
+
+[[package]]
+name = "json_parse"
+version = "0.1.0"
+source = "git+https://github.com/Bobxcat/json_parse.git?rev=110c23dce8693da4234aa7a2173d97d588a4e044#110c23dce8693da4234aa7a2173d97d588a4e044"
+dependencies = [
+ "ptree",
  "slotmap",
  "smol_str",
 ]

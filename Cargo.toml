@@ -14,6 +14,7 @@ smol_str = "0.2.1"
 criterion = { version = "0.5.1" }
 json = "0.12.4"
 serde_json = "1.0.116"
+parse_0 = { package = "json_parse", git = "https://github.com/Bobxcat/json_parse.git", rev = "110c23dce8693da4234aa7a2173d97d588a4e044" }
 
 [[bench]]
 harness = false
