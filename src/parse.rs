@@ -3,6 +3,7 @@ use std::{
     fmt::Debug,
     io::{self, Read, Write},
     num::NonZeroUsize,
+    slice,
     sync::Arc,
 };
 
@@ -104,22 +105,11 @@ impl std::fmt::Display for JsonNum {
 
 #[derive(Debug, Clone)]
 enum Item {
-    Object {
-        /// Note: we use a non-hashing hash function since `Ustr` already hashes using
-        fields: UstrMap<ItemId>,
-    },
-    Array {
-        elems: Vec<ItemId>,
-    },
-    String {
-        s: String,
-    },
-    Number {
-        n: JsonNum,
-    },
-    Boolean {
-        b: bool,
-    },
+    Object { fields: UstrMap<ItemId> },
+    Array { elems: Vec<ItemId> },
+    String { s: Ustr },
+    Number { n: JsonNum },
+    Boolean { b: bool },
     Null,
 }
 
@@ -246,7 +236,7 @@ impl<I: ParseInput> JsonParser<I> {
 
             let name = self.parse_string();
             let name = match &self.items[name] {
-                Item::String { s } => Ustr::from(s),
+                Item::String { s } => *s,
                 _ => unreachable!(),
             };
             self.cursor.skip_whitespace();
@@ -333,7 +323,7 @@ impl<I: ParseInput> JsonParser<I> {
             match self.cursor.get() {
                 b'\\' => {
                     let escaped = self.parse_string_escape();
-                    s_bytes.extend_from_slice(&escaped);
+                    s_bytes.extend_from_slice(escaped.as_slice());
                 }
                 b'"' => {
                     break;
@@ -345,7 +335,7 @@ impl<I: ParseInput> JsonParser<I> {
             }
         }
 
-        assert_eq!(self.cursor.get(), b'"');
+        debug_assert_eq!(self.cursor.get(), b'"');
         assert!(
             !self.cursor.finished(),
             "Parsing string value failed: string did not terminate before End of Input"
@@ -354,39 +344,40 @@ impl<I: ParseInput> JsonParser<I> {
         self.cursor.advance(1);
 
         let s = String::from_utf8(s_bytes).unwrap();
-        self.items.insert(Item::String { s })
+        self.items.insert(Item::String { s: Ustr::from(&s) })
     }
     /// Parses a JSON string escape sequence, such as `\n` or `\/` or `\u`
     ///
     /// Leaves the cursor at the first byte *after* the escaped sequence
+    #[inline]
     #[must_use]
-    fn parse_string_escape(&mut self) -> Box<[u8]> {
+    fn parse_string_escape(&mut self) -> StringEscapeBytes {
         assert_eq!(self.cursor.get(), b'\\');
         self.cursor.advance(1);
         match self.cursor.get() {
             single_char if [b'"', b'\\', b'/'].contains(&single_char) => {
                 self.cursor.advance(1);
-                [single_char].into()
+                single_char.into()
             }
             b'b' => {
                 self.cursor.advance(1);
-                [0x8].into()
+                0x8.into()
             }
             b'f' => {
                 self.cursor.advance(1);
-                [0xC].into()
+                0xC.into()
             }
             b'n' => {
                 self.cursor.advance(1);
-                [b'\n'].into()
+                b'\n'.into()
             }
             b'r' => {
                 self.cursor.advance(1);
-                [0xD].into()
+                0xD.into()
             }
             b't' => {
                 self.cursor.advance(1);
-                [0x9].into()
+                0x9.into()
             }
             b'u' => {
                 self.cursor.advance(1);
@@ -403,7 +394,7 @@ impl<I: ParseInput> JsonParser<I> {
                 let uni = char::try_from(encoded as u32)
                     .expect(&format!("Bad Unicode Codepoint: \\u{:?}", dig));
 
-                format!("{uni}").as_bytes().into()
+                uni.into()
             }
             other => panic!(
                 "[{}]Invalid `string` escape sequence: no sequence starts with \\{:?}",
@@ -475,6 +466,43 @@ impl<I: ParseInput> JsonParser<I> {
             exponent,
         };
         self.items.insert(Item::Number { n })
+    }
+}
+
+/// A value representing a parsed unicode escape sequence, one to four bytes long
+#[derive(Debug, Clone, Copy)]
+struct StringEscapeBytes {
+    bytes: [u8; 4],
+    len: usize,
+}
+
+impl StringEscapeBytes {
+    #[inline]
+    pub fn as_slice(&self) -> &[u8] {
+        &self.bytes[..self.len]
+    }
+}
+
+impl From<u8> for StringEscapeBytes {
+    #[inline(always)]
+    fn from(value: u8) -> Self {
+        Self {
+            bytes: [value, 0, 0, 0],
+            len: 1,
+        }
+    }
+}
+
+impl From<char> for StringEscapeBytes {
+    #[inline(always)]
+    fn from(value: char) -> Self {
+        let value = value.to_string();
+        let val = value.as_bytes();
+        let bytes = std::array::from_fn(|idx| val.get(idx).copied().unwrap_or(0));
+        Self {
+            bytes,
+            len: val.len(),
+        }
     }
 }
 
@@ -577,6 +605,7 @@ impl<I: ParseInput> ParseCursor<I> {
             input,
         }
     }
+    #[inline(always)]
     pub fn advance(&mut self, count: usize) {
         for _ in 0..count {
             self.curr_char = match self.input.next_byte(self.bytes_read) {
@@ -661,7 +690,7 @@ impl TreeItem for ItemPTree {
         match &self.items[self.this] {
             Item::Object { fields } => write!(f, "{preface}Object({})", fields.len())?,
             Item::Array { elems } => write!(f, "{preface}Array({})", elems.len())?,
-            Item::String { s } => write!(f, "{preface}{:?}", s)?,
+            Item::String { s } => write!(f, "{preface}{:?}", s.as_str())?,
             Item::Number { n } => write!(f, "{preface}{}", n)?,
             Item::Boolean { b } => write!(f, "{preface}{}", b)?,
             Item::Null => write!(f, "{preface}null")?,

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{mem::size_of, sync::Arc};
 
 use json_parse::parse::{JsonParser, ParseInput};
 
@@ -36,8 +36,9 @@ fn main() {
         ]
 
     "#;
-    let raw = include_str!("../twitter.json");
+    // let raw = include_str!("../twitter.json");
 
     let p = parse(raw.as_bytes());
-    // println!("{p}");
+
+    println!("{p}");
 }
