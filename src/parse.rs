@@ -544,6 +544,7 @@ fn ascii_digit_to_u8(b: u8) -> u8 {
     }
 }
 
+#[inline(always)]
 fn ascii_hex_digit_to_u8(b: u8) -> u8 {
     match b.to_ascii_lowercase() {
         b'a' => 10,
