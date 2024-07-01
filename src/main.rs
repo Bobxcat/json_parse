@@ -1,4 +1,4 @@
-use std::{mem::size_of, sync::Arc};
+use std::{hint::black_box, mem::size_of, sync::Arc};
 
 use json_parse::parse::{JsonParser, ParseInput};
 
@@ -8,7 +8,14 @@ fn parse<I: ParseInput>(input: I) -> JsonParser<I> {
     p
 }
 
+fn main_flamegraph() {
+    let raw = include_str!("../large-file.json");
+    let p = parse(raw.as_bytes());
+    black_box(p);
+}
+
 fn main() {
+    return main_flamegraph();
     let raw = r#"
 
         [

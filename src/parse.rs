@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, VecDeque},
-    fmt::Debug,
+    error::Error,
+    fmt::{Debug, Display},
     io::{self, Read, Write},
     num::NonZeroUsize,
     slice,
@@ -120,6 +121,40 @@ struct CachedConsts {
     pub item_null: ItemId,
 }
 
+#[derive(Debug, Clone)]
+pub struct ParseErr {
+    ty: Box<ParseErrTy>,
+}
+
+impl<E> From<E> for ParseErr
+where
+    ParseErrTy: From<E>,
+{
+    fn from(value: E) -> Self {
+        Self {
+            ty: Box::new(value.into()),
+        }
+    }
+}
+
+impl Display for ParseErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.ty, f)
+    }
+}
+
+impl Error for ParseErr {}
+
+#[derive(Debug, Clone)]
+pub enum ParseErrTy {
+    MalformedUtf8,
+}
+
+impl Display for ParseErrTy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ERROR TODO")
+    }
+}
 pub struct JsonParser<I> {
     head: Option<ItemId>,
     items: SlotMap<ItemId, Item>,
@@ -207,7 +242,7 @@ impl<I: ParseInput> JsonParser<I> {
                 self.cursor.bytes_read(),
                 self.cursor.get() as char
             );
-            self.cursor.advance(1)
+            self.cursor.step()
         }
         assert!(
             !self.cursor.get().is_ascii_digit(),
@@ -222,7 +257,7 @@ impl<I: ParseInput> JsonParser<I> {
     #[must_use]
     fn parse_object(&mut self) -> ItemId {
         assert_eq!(self.cursor.get(), b'{');
-        self.cursor.advance(1);
+        self.cursor.step();
         self.cursor.skip_whitespace();
 
         let mut fields = UstrMap::new();
@@ -248,7 +283,7 @@ impl<I: ParseInput> JsonParser<I> {
                 self.cursor.bytes_read(),
                 delim as char,
             );
-            self.cursor.advance(1);
+            self.cursor.step();
 
             let item = self.parse_any_item();
             fields.insert(name, item);
@@ -256,7 +291,7 @@ impl<I: ParseInput> JsonParser<I> {
             match self.cursor.get() {
                 b'}' => break,
                 b',' => {
-                    self.cursor.advance(1);
+                    self.cursor.step();
                     continue;
                 }
                 c => panic!(
@@ -268,7 +303,7 @@ impl<I: ParseInput> JsonParser<I> {
         }
 
         assert_eq!(self.cursor.get(), b'}');
-        self.cursor.advance(1);
+        self.cursor.step();
         self.items.insert(Item::Object { fields })
     }
 
@@ -276,7 +311,7 @@ impl<I: ParseInput> JsonParser<I> {
     fn parse_array(&mut self) -> ItemId {
         assert_eq!(self.cursor.get(), b'[');
 
-        self.cursor.advance(1);
+        self.cursor.step();
         self.cursor.skip_whitespace();
         let mut elems = vec![];
         loop {
@@ -291,7 +326,7 @@ impl<I: ParseInput> JsonParser<I> {
             match self.cursor.get() {
                 b']' => break,
                 b',' => {
-                    self.cursor.advance(1);
+                    self.cursor.step();
                     continue;
                 }
                 c => panic!(
@@ -303,7 +338,7 @@ impl<I: ParseInput> JsonParser<I> {
         }
 
         assert_eq!(self.cursor.get(), b']');
-        self.cursor.advance(1);
+        self.cursor.step();
         self.items.insert(Item::Array { elems })
     }
     /// Parses expecting a string, putting the cursor at the byte after the end quote of the string
@@ -318,7 +353,7 @@ impl<I: ParseInput> JsonParser<I> {
             self.cursor.get() as char
         );
 
-        self.cursor.advance(1);
+        self.cursor.step();
         loop {
             match self.cursor.get() {
                 b'\\' => {
@@ -330,7 +365,7 @@ impl<I: ParseInput> JsonParser<I> {
                 }
                 b => {
                     s_bytes.push(b);
-                    self.cursor.advance(1);
+                    self.cursor.step();
                 }
             }
         }
@@ -341,51 +376,51 @@ impl<I: ParseInput> JsonParser<I> {
             "Parsing string value failed: string did not terminate before End of Input"
         );
 
-        self.cursor.advance(1);
+        self.cursor.step();
 
         let s = std::str::from_utf8(&s_bytes).expect("Malformed UTF-8 in string!");
         self.items.insert(Item::String { s: Ustr::from(s) })
     }
-    /// Parses a JSON string escape sequence, such as `\n` or `\/` or `\u`
+    /// Parses a JSON string escape sequence, such as `\n` or `\/` or `\u2122`
     ///
     /// Leaves the cursor at the first byte *after* the escaped sequence
     #[inline]
     #[must_use]
     fn parse_string_escape(&mut self) -> StringEscapeBytes {
         assert_eq!(self.cursor.get(), b'\\');
-        self.cursor.advance(1);
+        self.cursor.step();
         match self.cursor.get() {
             single_char if [b'"', b'\\', b'/'].contains(&single_char) => {
-                self.cursor.advance(1);
+                self.cursor.step();
                 single_char.into()
             }
             b'b' => {
-                self.cursor.advance(1);
+                self.cursor.step();
                 0x8.into()
             }
             b'f' => {
-                self.cursor.advance(1);
+                self.cursor.step();
                 0xC.into()
             }
             b'n' => {
-                self.cursor.advance(1);
+                self.cursor.step();
                 b'\n'.into()
             }
             b'r' => {
-                self.cursor.advance(1);
+                self.cursor.step();
                 0xD.into()
             }
             b't' => {
-                self.cursor.advance(1);
+                self.cursor.step();
                 0x9.into()
             }
             b'u' => {
-                self.cursor.advance(1);
+                self.cursor.step();
                 // The values of each digit, in the range 0..16
                 let mut dig = [0u16; 4];
                 for i in 0..4 {
                     dig[i] = ascii_hex_digit_to_u8(self.cursor.get()) as u16;
-                    self.cursor.advance(1);
+                    self.cursor.step();
                 }
 
                 // Stolen directly from https://docs.rs/json/latest/src/json/parser.rs.html#441
@@ -410,7 +445,7 @@ impl<I: ParseInput> JsonParser<I> {
         let sign;
         if self.cursor.get() == b'-' {
             sign = Sign::Neg;
-            self.cursor.advance(1);
+            self.cursor.step();
         } else {
             sign = Sign::Pos;
         }
@@ -418,7 +453,7 @@ impl<I: ParseInput> JsonParser<I> {
         let mut digits = JsonDigits::empty();
 
         if self.cursor.get() == b'0' {
-            self.cursor.advance(1);
+            self.cursor.step();
             digits.push(0);
         } else {
             self.cursor.go_until_for_each(
@@ -429,7 +464,7 @@ impl<I: ParseInput> JsonParser<I> {
 
         let mut fraction = JsonDigits::empty();
         if self.cursor.get() == b'.' {
-            self.cursor.advance(1);
+            self.cursor.step();
             self.cursor.go_until_for_each(
                 |ascii| !ascii.is_ascii_digit(),
                 |ascii| fraction.push(ascii_digit_to_u8(ascii)),
@@ -439,13 +474,13 @@ impl<I: ParseInput> JsonParser<I> {
         let mut exponent_sign = Sign::Pos;
         let mut exponent = JsonDigits::empty();
         if self.cursor.get() == b'E' || self.cursor.get() == b'e' {
-            self.cursor.advance(1);
+            self.cursor.step();
             let sign;
             if self.cursor.get() == b'-' {
-                self.cursor.advance(1);
+                self.cursor.step();
                 sign = Sign::Neg;
             } else if self.cursor.get() == b'+' {
-                self.cursor.advance(1);
+                self.cursor.step();
                 sign = Sign::Pos;
             } else {
                 sign = Sign::Pos;
@@ -515,24 +550,28 @@ pub trait ParseInput {
 }
 
 impl ParseInput for Arc<[u8]> {
+    #[inline(always)]
     fn next_byte(&mut self, curr_read: usize) -> Option<u8> {
         self.get(curr_read).copied()
     }
 }
 
 impl ParseInput for &[u8] {
+    #[inline(always)]
     fn next_byte(&mut self, curr_read: usize) -> Option<u8> {
         self.get(curr_read).copied()
     }
 }
 
 impl ParseInput for VecDeque<u8> {
+    #[inline(always)]
     fn next_byte(&mut self, _: usize) -> Option<u8> {
         self.pop_back()
     }
 }
 
 impl<R: Read> ParseInput for std::io::BufReader<R> {
+    #[inline(always)]
     fn next_byte(&mut self, _: usize) -> Option<u8> {
         let mut b = [0];
         self.read_exact(&mut b).ok()?;
@@ -541,6 +580,7 @@ impl<R: Read> ParseInput for std::io::BufReader<R> {
 }
 
 impl ParseInput for Box<dyn ParseInput> {
+    #[inline(always)]
     fn next_byte(&mut self, r: usize) -> Option<u8> {
         (**self).next_byte(r)
     }
@@ -605,28 +645,39 @@ impl<I: ParseInput> ParseCursor<I> {
             input,
         }
     }
+    /// Steps the cursor forwards once
+    #[inline(always)]
+    pub fn step(&mut self) {
+        self.curr_char = match self.input.next_byte(self.bytes_read) {
+            Some(c) => c,
+            None => {
+                self.finished = true;
+                return;
+            }
+        };
+        self.bytes_read += 1;
+    }
+    /// `step`s `count` times
     #[inline(always)]
     pub fn advance(&mut self, count: usize) {
         for _ in 0..count {
-            self.curr_char = match self.input.next_byte(self.bytes_read) {
-                Some(c) => c,
-                None => {
-                    self.finished = true;
-                    return;
-                }
-            };
-            self.bytes_read += 1;
+            self.step();
         }
     }
+    #[inline(always)]
     pub fn get(&self) -> u8 {
         self.curr_char
     }
+
+    #[inline(always)]
     /// The number of bytes that have been read so far
     pub fn bytes_read(&self) -> NonZeroUsize {
         self.bytes_read
             .try_into()
             .expect("Somehow `ParseCursor` read more chars than `usize` could handle!")
     }
+
+    #[inline(always)]
     pub fn finished(&self) -> bool {
         self.finished
     }
@@ -655,7 +706,7 @@ impl<I: ParseInput> ParseCursor<I> {
 
             for_each(self.get());
 
-            self.advance(1);
+            self.step();
         }
     }
 
@@ -663,6 +714,7 @@ impl<I: ParseInput> ParseCursor<I> {
     ///
     /// The cursor will end up on the index of the byte that returned `true`.
     /// If the current byte returns `true`, the cursor will not move
+    #[inline(always)]
     pub fn go_until(&mut self, terminate: impl Fn(u8) -> bool) {
         self.go_until_for_each(terminate, std::mem::drop)
     }
