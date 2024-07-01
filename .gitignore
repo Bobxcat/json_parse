@@ -1,3 +1,4 @@
 /target
 blondie_dtrace.exe
 flamegraph.svg
+perf.data*
