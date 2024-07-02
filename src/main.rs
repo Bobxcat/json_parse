@@ -4,7 +4,9 @@ use json_parse::parse::{JsonParser, ParseInput};
 
 fn parse<I: ParseInput>(input: I) -> JsonParser<I> {
     let mut p = JsonParser::new(input);
-    p.parse();
+    if let Err(e) = p.parse() {
+        panic!("ERROR: {e}")
+    }
     p
 }
 
@@ -15,7 +17,7 @@ fn main_flamegraph() {
 }
 
 fn main() {
-    return main_flamegraph();
+    // return main_flamegraph();
     let raw = r#"
 
         [
@@ -46,6 +48,7 @@ fn main() {
     // let raw = include_str!("../twitter.json");
 
     let p = parse(raw.as_bytes());
+    // let p = parse([b'{', b'"', 125, 129, b'"', b'}'].as_slice());
 
     println!("{p}");
 }
