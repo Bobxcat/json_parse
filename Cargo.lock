@@ -278,6 +278,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
+name = "fxhash"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -303,6 +312,9 @@ name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
+dependencies = [
+ "ahash",
+]
 
 [[package]]
 name = "hermit-abi"
@@ -376,14 +388,30 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "criterion",
+ "fxhash",
  "itoa",
  "json",
+ "json_parse 0.1.0 (git+https://github.com/Bobxcat/json_parse.git?rev=11c3b3eaa6b68cb886c5fe8a866f22db8053a251)",
  "json_parse 0.1.0 (git+https://github.com/Bobxcat/json_parse.git?rev=33b7caa349e884a604bd85ef7bf9acffc9705326)",
  "json_parse 0.1.0 (git+https://github.com/Bobxcat/json_parse.git?rev=903aed8c46024b9165624faac9f012c36a31a703)",
  "json_parse 0.1.0 (git+https://github.com/Bobxcat/json_parse.git?rev=f1cd7181c2fdf03910bc623661a44bbc9b943895)",
  "nohash",
  "ptree",
  "serde_json",
+ "slotmap",
+ "string-interner",
+ "ustr",
+]
+
+[[package]]
+name = "json_parse"
+version = "0.1.0"
+source = "git+https://github.com/Bobxcat/json_parse.git?rev=11c3b3eaa6b68cb886c5fe8a866f22db8053a251#11c3b3eaa6b68cb886c5fe8a866f22db8053a251"
+dependencies = [
+ "ahash",
+ "itoa",
+ "nohash",
+ "ptree",
  "slotmap",
  "ustr",
 ]
@@ -826,6 +854,17 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "string-interner"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c6a0d765f5807e98a091107bae0a56ea3799f66a5de47b2c84c94a39c09974e"
+dependencies = [
+ "cfg-if",
+ "hashbrown",
+ "serde 1.0.199",
+]
 
 [[package]]
 name = "syn"

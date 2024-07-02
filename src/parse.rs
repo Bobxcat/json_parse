@@ -9,8 +9,10 @@ use std::{
 };
 
 use ahash::HashMapExt;
+use fxhash::FxHashMap;
 use ptree::TreeItem;
 use slotmap::{new_key_type, SlotMap};
+use string_interner::{DefaultStringInterner, DefaultSymbol};
 use ustr::{Ustr, UstrMap};
 
 new_key_type! {
@@ -106,11 +108,21 @@ impl std::fmt::Display for JsonNum {
 
 #[derive(Debug, Clone)]
 enum Item {
-    Object { fields: UstrMap<ItemId> },
-    Array { elems: Vec<ItemId> },
-    String { s: Ustr },
-    Number { n: JsonNum },
-    Boolean { b: bool },
+    Object {
+        fields: FxHashMap<DefaultSymbol, ItemId>,
+    },
+    Array {
+        elems: Vec<ItemId>,
+    },
+    String {
+        s: DefaultSymbol,
+    },
+    Number {
+        n: JsonNum,
+    },
+    Boolean {
+        b: bool,
+    },
     Null,
 }
 
@@ -157,6 +169,7 @@ impl Display for ParseErrTy {
 }
 pub struct JsonParser<I> {
     head: Option<ItemId>,
+    str_intern: DefaultStringInterner,
     items: SlotMap<ItemId, Item>,
     cache: CachedConsts,
     cursor: ParseCursor<I>,
@@ -177,6 +190,7 @@ impl<I: ParseInput> JsonParser<I> {
         };
         Self {
             head: None,
+            str_intern: DefaultStringInterner::new(),
             items,
             cache,
             cursor: ParseCursor::new(input),
@@ -260,7 +274,7 @@ impl<I: ParseInput> JsonParser<I> {
         self.cursor.step();
         self.cursor.skip_whitespace();
 
-        let mut fields = UstrMap::new();
+        let mut fields = FxHashMap::new();
 
         loop {
             // In case of empty object, check at the start
@@ -379,7 +393,8 @@ impl<I: ParseInput> JsonParser<I> {
         self.cursor.step();
 
         let s = std::str::from_utf8(&s_bytes).expect("Malformed UTF-8 in string!");
-        self.items.insert(Item::String { s: Ustr::from(s) })
+        let s = self.str_intern.get_or_intern(s);
+        self.items.insert(Item::String { s })
     }
     /// Parses a JSON string escape sequence, such as `\n` or `\/` or `\u2122`
     ///
@@ -726,9 +741,10 @@ impl<I: ParseInput> ParseCursor<I> {
 /// An [Item] wrapper for pretty-printing the tree. This is a fairly expensive type
 #[derive(Debug, Clone)]
 struct ItemPTree {
-    this_name: Option<Ustr>,
+    this_name: Option<DefaultSymbol>,
     this: ItemId,
     items: Arc<SlotMap<ItemId, Item>>,
+    str_intern: Arc<DefaultStringInterner>,
 }
 
 impl TreeItem for ItemPTree {
@@ -736,13 +752,13 @@ impl TreeItem for ItemPTree {
 
     fn write_self<W: std::io::Write>(&self, f: &mut W, _: &ptree::Style) -> std::io::Result<()> {
         let preface = match self.this_name.clone() {
-            Some(s) => format!("\"{s}\": "),
+            Some(s) => format!("\"{}\": ", self.str_intern.resolve(s).unwrap()),
             None => format!(""),
         };
         match &self.items[self.this] {
             Item::Object { fields } => write!(f, "{preface}Object({})", fields.len())?,
             Item::Array { elems } => write!(f, "{preface}Array({})", elems.len())?,
-            Item::String { s } => write!(f, "{preface}{:?}", s.as_str())?,
+            Item::String { s } => write!(f, "{preface}{:?}", self.str_intern.resolve(*s).unwrap())?,
             Item::Number { n } => write!(f, "{preface}{}", n)?,
             Item::Boolean { b } => write!(f, "{preface}{}", b)?,
             Item::Null => write!(f, "{preface}null")?,
@@ -759,6 +775,7 @@ impl TreeItem for ItemPTree {
                     this_name: Some(name.clone()),
                     this: *id,
                     items: self.items.clone(),
+                    str_intern: self.str_intern.clone(),
                 })
                 .collect::<Vec<_>>()
                 .into(),
@@ -768,6 +785,7 @@ impl TreeItem for ItemPTree {
                     this_name: None,
                     this: *id,
                     items: self.items.clone(),
+                    str_intern: self.str_intern.clone(),
                 })
                 .collect::<Vec<_>>()
                 .into(),
@@ -784,6 +802,7 @@ impl<I> std::fmt::Display for JsonParser<I> {
             this_name: None,
             this: self.head.unwrap(),
             items: Arc::new(self.items.clone()),
+            str_intern: Arc::new(self.str_intern.clone()),
         };
         let mut msg = Vec::new();
         ptree::write_tree(&p, &mut msg).unwrap();
