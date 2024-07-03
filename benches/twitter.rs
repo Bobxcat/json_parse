@@ -140,6 +140,11 @@ bench_json_parse_api1!(
     parse_4_custom_intern,
     "json_parse_4_custom_intern"
 );
+bench_json_parse_api1!(
+    BenchJsonParse4PreallocString,
+    parse_4_prealloc_string,
+    "json_parse_4_prealloc_string"
+);
 bench_json_parse_api1!(BenchJsonParseCurr, json_parse, "json_parse_curr");
 
 fn do_bench_all(grp: &mut BenchmarkGroup<WallTime>, path: PathBuf) {
@@ -151,6 +156,7 @@ fn do_bench_all(grp: &mut BenchmarkGroup<WallTime>, path: PathBuf) {
     do_bench(grp, &path, BenchJsonParse3);
     do_bench(grp, &path, BenchJsonParse3ErrHandling);
     do_bench(grp, &path, BenchJsonParse4CustomIntern);
+    do_bench(grp, &path, BenchJsonParse4PreallocString);
     do_bench(grp, &path, BenchJsonParseCurr);
 }
 
