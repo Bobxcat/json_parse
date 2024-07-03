@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{hash_map, HashMap},
     hash::{BuildHasher, Hash, Hasher},
 };
 
@@ -106,7 +106,6 @@ impl nohash::IsEnabled for RawEntry {}
 
 #[derive(Debug)]
 pub struct StrIntern {
-    sym_counter: usize,
     resolve: Vec<Entry>,
     raw: nohash::IntMap<RawEntry, (Sym, Entry)>,
 }
@@ -114,29 +113,23 @@ pub struct StrIntern {
 impl StrIntern {
     pub fn new() -> Self {
         Self {
-            sym_counter: 0,
             resolve: Vec::default(),
             raw: HashMap::default(),
         }
     }
 
-    fn make_sym(&mut self) -> Sym {
-        let s = Sym(self.sym_counter);
-        self.sym_counter += 1;
-        s
-    }
-
     pub fn get(&mut self, s_bytes: Vec<u8>) -> Result<Sym, ParseErrTy> {
-        let raw = RawEntry::new(s_bytes);
-        if let Some((sym, _)) = self.raw.get(&raw) {
-            return Ok(*sym);
-        }
+        match self.raw.entry(RawEntry::new(s_bytes)) {
+            hash_map::Entry::Occupied(o) => Ok(o.get().0),
+            hash_map::Entry::Vacant(v) => {
+                let entry = Entry::new(v.key())?;
+                let sym = Sym(self.resolve.len());
 
-        let entry = Entry::new(&raw)?;
-        let sym = self.make_sym();
-        self.resolve.push(entry.clone_shallow());
-        self.raw.insert(raw, (sym, entry));
-        Ok(sym)
+                self.resolve.push(entry.clone_shallow());
+                v.insert((sym, entry));
+                Ok(sym)
+            }
+        }
     }
 
     pub fn resolve(&self, s: Sym) -> &str {
@@ -163,7 +156,6 @@ impl Clone for StrIntern {
             new.raw.insert(raw_entry, (sym, entry.clone_shallow()));
             new.resolve.push(entry);
         }
-        new.sym_counter = new.resolve.len();
 
         new
     }
