@@ -9,7 +9,7 @@ use std::{
 
 use ahash::HashMapExt;
 use fxhash::FxHashMap;
-use ptree::TreeItem;
+use ptree::{PrintConfig, TreeItem};
 use slotmap::{new_key_type, SlotMap};
 
 use crate::jsontern::{StrIntern, Sym};
@@ -965,7 +965,7 @@ impl<I> std::fmt::Display for JsonParser<I> {
             str_intern: Arc::new(self.str_intern.clone()),
         };
         let mut msg = Vec::new();
-        ptree::write_tree(&p, &mut msg).unwrap();
+        ptree::write_tree_with(&p, &mut msg, &PrintConfig::default()).unwrap();
         let msg = String::from_utf8(msg).unwrap();
         write!(f, "{msg}")
     }

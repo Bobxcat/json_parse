@@ -1,31 +1,38 @@
 use std::{
     collections::HashMap,
     hash::{BuildHasher, Hash, Hasher},
-    sync::Arc,
 };
 
-use fxhash::{FxBuildHasher, FxHashMap};
-use slotmap::{new_key_type, SlotMap};
-use string_interner::DefaultHashBuilder;
+use fxhash::FxBuildHasher;
 
 use crate::parse::ParseErrTy;
 
 type HashBuilder = FxBuildHasher;
 
-new_key_type! {
-    /// A symbol representing a unique entry in a `StrIntern` instance
-    pub struct Sym;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Sym(usize);
+
+impl Hash for Sym {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_usize(self.0);
+    }
 }
 
-#[derive(Debug, Clone)]
-pub struct Entry {
-    resolved: Arc<str>,
+impl nohash::IsEnabled for Sym {}
+
+/// A view into [RawEntry] which views the bytes through a `*const str`.
+///
+/// It is a safety violation for an instance of this struct to live through
+/// any mutation of the `RawEntry` it references
+#[derive(Debug)]
+struct Entry {
+    resolved: *const str,
     hash: u64,
 }
 
 impl PartialEq for Entry {
     fn eq(&self, other: &Self) -> bool {
-        self.hash == other.hash && self.resolved == other.resolved
+        self.hash == other.hash && self.as_str() == other.as_str()
     }
 }
 
@@ -43,12 +50,25 @@ impl Entry {
             at_offset: e.valid_up_to(),
         })?;
         Ok(Self {
-            resolved: Arc::from(s),
+            resolved: s as *const str,
             hash: raw.hash,
         })
     }
+
+    fn clone_shallow(&self) -> Self {
+        Self {
+            resolved: self.resolved,
+            hash: self.hash,
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        // SAFETY: Since its creation, we have done no mutations to the owning `RawEntry`
+        unsafe { &*self.resolved }
+    }
 }
 
+/// See [Entry] for possible safety problems
 #[derive(Debug, Clone)]
 struct RawEntry {
     bytes: Vec<u8>,
@@ -80,18 +100,26 @@ impl Hash for RawEntry {
 
 impl nohash::IsEnabled for RawEntry {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StrIntern {
-    resolve: SlotMap<Sym, Entry>,
+    sym_counter: usize,
+    resolve: Vec<Entry>,
     raw: nohash::IntMap<RawEntry, (Sym, Entry)>,
 }
 
 impl StrIntern {
     pub fn new() -> Self {
         Self {
-            resolve: SlotMap::default(),
+            sym_counter: 0,
+            resolve: Vec::default(),
             raw: HashMap::default(),
         }
+    }
+
+    fn make_sym(&mut self) -> Sym {
+        let s = Sym(self.sym_counter);
+        self.sym_counter += 1;
+        s
     }
 
     pub fn get(&mut self, s_bytes: Vec<u8>) -> Result<Sym, ParseErrTy> {
@@ -101,12 +129,38 @@ impl StrIntern {
         }
 
         let entry = Entry::new(&raw)?;
-        let sym = self.resolve.insert(entry.clone());
+        let sym = self.make_sym();
+        self.resolve.push(entry.clone_shallow());
         self.raw.insert(raw, (sym, entry));
         Ok(sym)
     }
 
     pub fn resolve(&self, s: Sym) -> &str {
-        &self.resolve[s].resolved
+        self.resolve[s.0].as_str()
+    }
+}
+
+impl Clone for StrIntern {
+    fn clone(&self) -> Self {
+        // Note: We need to maintain the mapping of `Sym`s to `Entry`s
+        // while cloning the data and making new `Entry`s pointing into new `RawEntry`s
+
+        let mut entries = vec![];
+        for (raw_entry, (sym, _do_not_use)) in &self.raw {
+            let raw_entry = raw_entry.clone();
+            let entry = Entry::new(&raw_entry).unwrap();
+            entries.push((*sym, raw_entry, entry));
+        }
+
+        entries.sort_by_key(|(sym, _, _)| sym.0);
+        let mut new = Self::new();
+
+        for (sym, raw_entry, entry) in entries {
+            new.raw.insert(raw_entry, (sym, entry.clone_shallow()));
+            new.resolve.push(entry);
+        }
+        new.sym_counter = new.resolve.len();
+
+        new
     }
 }
