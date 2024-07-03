@@ -506,7 +506,7 @@ impl<I: ParseInput> JsonParser<I> {
     /// Parses expecting a string, putting the cursor at the byte after the end quote of the string
     #[must_use]
     fn parse_string(&mut self) -> ParseRes<ItemId> {
-        let mut s_bytes = vec![];
+        let mut s_bytes = Vec::with_capacity(64);
         if self.cursor.get() != b'"' {
             return Err(ParseErrTy::WrongToken {
                 expected_any: vec!['"'],
