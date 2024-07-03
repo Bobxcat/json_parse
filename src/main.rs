@@ -18,6 +18,7 @@ fn main_flamegraph() {
 
 fn main() {
     return main_flamegraph();
+
     let raw = r#"
 
         [

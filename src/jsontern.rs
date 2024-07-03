@@ -3,11 +3,11 @@ use std::{
     hash::{BuildHasher, Hash, Hasher},
 };
 
-use fxhash::FxBuildHasher;
-
 use crate::parse::ParseErrTy;
 
-type HashBuilder = FxBuildHasher;
+/// The `BuildHasher` implementation used for precomputed hashes.
+/// This hash is DoS resistant
+type HashBuilder = ahash::random_state::RandomState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Sym(usize);
@@ -80,8 +80,8 @@ struct RawEntry {
 }
 
 impl RawEntry {
-    fn new(bytes: Vec<u8>) -> Self {
-        let hash = HashBuilder::default().hash_one(&bytes);
+    fn new(bytes: Vec<u8>, s: &HashBuilder) -> Self {
+        let hash = s.hash_one(&bytes);
         Self { bytes, hash }
     }
 }
@@ -108,6 +108,7 @@ impl nohash::IsEnabled for RawEntry {}
 pub struct StrIntern {
     resolve: Vec<Entry>,
     raw: nohash::IntMap<RawEntry, (Sym, Entry)>,
+    s: HashBuilder,
 }
 
 impl StrIntern {
@@ -115,11 +116,12 @@ impl StrIntern {
         Self {
             resolve: Vec::default(),
             raw: HashMap::default(),
+            s: HashBuilder::default(),
         }
     }
 
     pub fn get(&mut self, s_bytes: Vec<u8>) -> Result<Sym, ParseErrTy> {
-        match self.raw.entry(RawEntry::new(s_bytes)) {
+        match self.raw.entry(RawEntry::new(s_bytes, &self.s)) {
             hash_map::Entry::Occupied(o) => Ok(o.get().0),
             hash_map::Entry::Vacant(v) => {
                 let entry = Entry::new(v.key())?;
