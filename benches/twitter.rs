@@ -71,6 +71,7 @@ impl Bench for BenchJson {
     }
 }
 
+/// First API, no error handling
 macro_rules! bench_json_parse_api0 {
     ($struct_name:ident, $root:ident, $bench_name:literal) => {
         struct $struct_name;
@@ -101,20 +102,56 @@ bench_json_parse_api0!(BenchJsonParse0, parse_0, "json_parse_0");
 bench_json_parse_api0!(BenchJsonParse1, parse_1, "json_parse_1");
 bench_json_parse_api0!(BenchJsonParse2, parse_2, "json_parse_2");
 bench_json_parse_api0!(BenchJsonParse3, parse_3, "json_parse_3");
-bench_json_parse_api0!(BenchJsonParseCurr, json_parse, "json_parse_curr");
 
-pub fn entry(c: &mut Criterion) {
-    let path = black_box(PathBuf::from("./twitter.json"));
+/// Second API, error handling (unwrap errors)
+macro_rules! bench_json_parse_api1 {
+    ($struct_name:ident, $root:ident, $bench_name:literal) => {
+        struct $struct_name;
 
-    let grp = &mut c.benchmark_group("Parse Twitter File");
+        impl Bench for $struct_name {
+            const CAN_STREAM: bool = true;
 
+            fn name(&self) -> impl Into<String> {
+                $bench_name
+            }
+
+            fn parse_str(&self, s: &str) {
+                let mut p = $root::parse::JsonParser::new(s.as_bytes());
+                let x = p.parse().unwrap();
+                black_box((x, p));
+            }
+
+            fn parse_stream(&self, s: BufReader<impl Read>) {
+                let mut p = $root::parse::JsonParser::new(s);
+                let x = p.parse().unwrap();
+                black_box((x, p));
+            }
+        }
+    };
+}
+
+bench_json_parse_api1!(
+    BenchJsonParse3ErrHandling,
+    parse_3_err_handling,
+    "json_parse_3_err_handling"
+);
+bench_json_parse_api1!(BenchJsonParseCurr, json_parse, "json_parse_curr");
+
+fn do_bench_all(grp: &mut BenchmarkGroup<WallTime>, path: PathBuf) {
     do_bench(grp, &path, BenchSerdeJson);
     do_bench(grp, &path, BenchJson);
     do_bench(grp, &path, BenchJsonParse0);
     do_bench(grp, &path, BenchJsonParse1);
     do_bench(grp, &path, BenchJsonParse2);
     do_bench(grp, &path, BenchJsonParse3);
+    do_bench(grp, &path, BenchJsonParse3ErrHandling);
     do_bench(grp, &path, BenchJsonParseCurr);
+}
+
+pub fn entry(c: &mut Criterion) {
+    let path = black_box(PathBuf::from("./twitter.json"));
+    let grp = &mut c.benchmark_group("Parse Twitter File");
+    do_bench_all(grp, path);
 }
 
 criterion_group!(benches, entry);

@@ -394,6 +394,7 @@ dependencies = [
  "json_parse 0.1.0 (git+https://github.com/Bobxcat/json_parse.git?rev=11c3b3eaa6b68cb886c5fe8a866f22db8053a251)",
  "json_parse 0.1.0 (git+https://github.com/Bobxcat/json_parse.git?rev=33b7caa349e884a604bd85ef7bf9acffc9705326)",
  "json_parse 0.1.0 (git+https://github.com/Bobxcat/json_parse.git?rev=903aed8c46024b9165624faac9f012c36a31a703)",
+ "json_parse 0.1.0 (git+https://github.com/Bobxcat/json_parse.git?rev=e326d6dccc09b8b576432e96ae8558d79292110d)",
  "json_parse 0.1.0 (git+https://github.com/Bobxcat/json_parse.git?rev=f1cd7181c2fdf03910bc623661a44bbc9b943895)",
  "ptree",
  "serde_json",
@@ -435,6 +436,20 @@ dependencies = [
  "ptree",
  "slotmap",
  "smol_str",
+]
+
+[[package]]
+name = "json_parse"
+version = "0.1.0"
+source = "git+https://github.com/Bobxcat/json_parse.git?rev=e326d6dccc09b8b576432e96ae8558d79292110d#e326d6dccc09b8b576432e96ae8558d79292110d"
+dependencies = [
+ "ahash",
+ "fxhash",
+ "itoa",
+ "ptree",
+ "slotmap",
+ "string-interner",
+ "ustr",
 ]
 
 [[package]]

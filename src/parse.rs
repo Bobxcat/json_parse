@@ -1,10 +1,9 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     error::Error,
     fmt::{Debug, Display},
-    io::{self, Read, Write},
+    io::Read,
     num::NonZeroUsize,
-    slice,
     sync::Arc,
 };
 
@@ -12,8 +11,8 @@ use ahash::HashMapExt;
 use fxhash::FxHashMap;
 use ptree::TreeItem;
 use slotmap::{new_key_type, SlotMap};
-use string_interner::{symbol::SymbolU32, DefaultStringInterner, DefaultSymbol};
-use ustr::{Ustr, UstrMap};
+
+use crate::jsontern::{StrIntern, Sym};
 
 new_key_type! {
     pub struct ItemId;
@@ -108,21 +107,11 @@ impl std::fmt::Display for JsonNum {
 
 #[derive(Debug, Clone)]
 enum Item {
-    Object {
-        fields: FxHashMap<SymbolU32, ItemId>,
-    },
-    Array {
-        elems: Vec<ItemId>,
-    },
-    String {
-        s: SymbolU32,
-    },
-    Number {
-        n: JsonNum,
-    },
-    Boolean {
-        b: bool,
-    },
+    Object { fields: FxHashMap<Sym, ItemId> },
+    Array { elems: Vec<ItemId> },
+    String { s: Sym },
+    Number { n: JsonNum },
+    Boolean { b: bool },
     Null,
 }
 
@@ -302,7 +291,7 @@ impl Display for ParseErrTy {
 }
 pub struct JsonParser<I> {
     head: Option<ItemId>,
-    str_intern: DefaultStringInterner,
+    str_intern: StrIntern,
     items: SlotMap<ItemId, Item>,
     cache: CachedConsts,
     cursor: ParseCursor<I>,
@@ -323,7 +312,7 @@ impl<I: ParseInput> JsonParser<I> {
         };
         Self {
             head: None,
-            str_intern: DefaultStringInterner::new(),
+            str_intern: StrIntern::new(),
             items,
             cache,
             cursor: ParseCursor::new(input),
@@ -549,14 +538,10 @@ impl<I: ParseInput> JsonParser<I> {
 
         let _eoi = self.cursor.step();
 
-        let s = std::str::from_utf8(&s_bytes).map_err(|e| {
-            ParseErrTy::MalformedUtf8 {
-                unexpected: s_bytes[e.valid_up_to()],
-                at_offset: e.valid_up_to(),
-            }
-            .with_context(self)
-        })?;
-        let s = self.str_intern.get_or_intern(s);
+        let s = self
+            .str_intern
+            .get(s_bytes)
+            .map_err(|e| e.with_context(self))?;
         Ok(self.items.insert(Item::String { s }))
     }
 
@@ -916,10 +901,10 @@ impl<I: ParseInput> ParseCursor<I> {
 /// An [Item] wrapper for pretty-printing the tree. This is a fairly expensive type
 #[derive(Debug, Clone)]
 struct ItemPTree {
-    this_name: Option<DefaultSymbol>,
+    this_name: Option<Sym>,
     this: ItemId,
     items: Arc<SlotMap<ItemId, Item>>,
-    str_intern: Arc<DefaultStringInterner>,
+    str_intern: Arc<StrIntern>,
 }
 
 impl TreeItem for ItemPTree {
@@ -927,13 +912,13 @@ impl TreeItem for ItemPTree {
 
     fn write_self<W: std::io::Write>(&self, f: &mut W, _: &ptree::Style) -> std::io::Result<()> {
         let preface = match self.this_name.clone() {
-            Some(s) => format!("\"{}\": ", self.str_intern.resolve(s).unwrap()),
+            Some(s) => format!("\"{}\": ", self.str_intern.resolve(s)),
             None => format!(""),
         };
         match &self.items[self.this] {
             Item::Object { fields } => write!(f, "{preface}Object({})", fields.len())?,
             Item::Array { elems } => write!(f, "{preface}Array({})", elems.len())?,
-            Item::String { s } => write!(f, "{preface}{:?}", self.str_intern.resolve(*s).unwrap())?,
+            Item::String { s } => write!(f, "{preface}{:?}", self.str_intern.resolve(*s))?,
             Item::Number { n } => write!(f, "{preface}{}", n)?,
             Item::Boolean { b } => write!(f, "{preface}{}", b)?,
             Item::Null => write!(f, "{preface}null")?,
