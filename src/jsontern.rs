@@ -68,7 +68,11 @@ impl Entry {
     }
 }
 
-/// See [Entry] for possible safety problems
+/// Owns the raw bytes for an entry along with a precomputed hash for the bytes
+///
+/// ## Safety
+/// * If any [Entry] references a [RawEntry], that [RawEntry] must not be mutated
+/// * See [Entry] for other safety concerns
 #[derive(Debug, Clone)]
 struct RawEntry {
     bytes: Vec<u8>,
